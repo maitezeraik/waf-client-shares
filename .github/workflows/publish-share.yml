@@ -1,0 +1,51 @@
+name: Publish client share
+
+on:
+  repository_dispatch:
+    types: [publish-share]
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Client / pitch name"
+        required: true
+      ids:
+        description: "Comma-separated project ids"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-share
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate page
+        env:
+          CLIENT_NAME: ${{ github.event.client_payload.name || github.event.inputs.name }}
+          CLIENT_IDS: ${{ github.event.client_payload.ids || github.event.inputs.ids }}
+        run: |
+          python3 generate_creds_share.py --name "$CLIENT_NAME" --ids "$CLIENT_IDS"
+
+      - name: Commit and push
+        env:
+          CLIENT_NAME: ${{ github.event.client_payload.name || github.event.inputs.name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet && echo "No changes" || git commit -m "Publish share: $CLIENT_NAME"
+          git pull --rebase origin main
+          git push
